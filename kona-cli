@@ -2,13 +2,15 @@
 
 get_new(){
 
-last_id=$(cat ~/.cache/konachan 2> /dev/null || curl -s "https://konachan.com/post.json" -d "page=2" | jq '.[].id' | head -n 1)
-latest_id=$(curl -s "https://konachan.com/post.json" | jq '.[0].id')
+  last_id=$(cat ~/.cache/konachan 2> /dev/null ||
+    curl -s "https://konachan.com/post.json" -d "page=2" | sed -nE 's_\[\{"id":([0-9]*),.*_\1_p')
+  latest_id=$(curl -s "https://konachan.com/post.json" | sed -nE 's_\[\{"id":([0-9]*),.*_\1_p')
   
 if [ "$latest_id" -ne "$last_id" ]
 then
 
-    json_data=$(curl -s "https://konachan.com/post.json" -d 'limit=1000' | jq '.[]' | sed -n "/\"id\": $(printf '%s' "$last_id")/q;p" | sed '${/{/d;}')
+    # json_data=$(curl -s "https://konachan.com/post.json" -d 'limit=1000' | jq '.[]' | sed -n "/\"id\": $(printf '%s' "$last_id")/q;p" | sed '${/{/d;}')
+    json_data=$(curl -s "https://konachan.com/post.json" -d 'limit=1000' | tr "," "\n" | sed -n "/\"id\": $(printf '%s' "$last_id")/q;p")
     printf '%s' "$latest_id" > ~/.cache/konachan &
 
     main "$json_data"
@@ -40,13 +42,14 @@ search(){
 if [ -n "$1" ] && [ -n "$2" ]
 then
     
-    tag_list=$(curl -s "https://konachan.com/tag.json?limit=10" -d "order=count" -d "name=$2" | jq '.[].name' | tr -d '"')
+    tag_list=$(curl -s "https://konachan.com/tag.json?limit=10" -d "order=count" -d "name=$2"|tr "{|}" "\n" |sed -nE 's_.*"name":"([^"]*)".*_\1_p')
 
     PS3=$(printf '\n\x1B[34m%s\x1B[0m\n' "Choose your mood: ")
     export PS3
     select choice in $tag_list
     do
-	json_data=$(curl -s "https://konachan.com/post.json?limit=$1" -d "tags=$choice" | jq | sed -e '1d;$d' -e 's/\},/\}/g')
+	# json_data=$(curl -s "https://konachan.com/post.json?limit=$1" -d "tags=$choice" | jq | sed -e '1d;$d' -e 's/\},/\}/g')
+  json_data=$(curl -s "https://konachan.com/post.json?limit=$1" -d "tags=$choice"|tr "{|}|," "\n")
       	break
     done
 
@@ -65,7 +68,8 @@ fi
 
 main(){
 
-sample_urls=$(printf '%s' "$1" | jq '.sample_url' | tr -d '"')
+# sample_urls=$(printf '%s' "$1" | jq '.sample_url' | tr -d '"')
+sample_urls=$(printf '%s' "$json_data"|sed -nE 's@.*"sample_url":"([^"]*)".*@\1@p')
     
 printf '\n\x1B[34m%s\x1B[0m\n' "Downloading sample wallpapers..."
 
